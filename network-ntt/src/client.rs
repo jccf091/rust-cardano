@@ -378,13 +378,13 @@ where
             sink2_tx.unbounded_send(Command::Request(request)).unwrap();
             future::ok(())
         })
-        .map_err(|_err| ())
+        .map_err(|_err| { println!("error0"); () })
         .map(|_| ());
 
     // Receive commands.
     let sink = sink
         .subscribe(false)
-        .map_err(|_err| ())
+        .map_err(|_err| { println!("error1"); ()})
         .and_then(move |(_lwcid, sink)| {
             println!("message");
             let cc: ConnectionState<B> = ConnectionState::new();
@@ -516,8 +516,8 @@ where
                 .map(|_| ())
         });
     let cmds = commands.select(sink)
-                       .map_err(|_| ())
-                       .map(|_| ());
+                       .map_err(|_| {println!("error4"); ()})
+                       .map(|_| { println!("ok5"); ()});
 
     println!("here!");
     stream.select(cmds).then(|_| { println!("end"); Ok(()) })
