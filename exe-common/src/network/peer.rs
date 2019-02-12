@@ -6,6 +6,7 @@ use cardano::{
 use config;
 use network::api::{BlockRef, *};
 use network::{hermes, native, ntt, Result};
+use std::net::ToSocketAddrs;
 
 /// network object to handle a peer connection and redirect to constructing
 /// the appropriate network protocol object (native, http...)
@@ -31,7 +32,12 @@ impl Peer {
                 Ok(Peer::Http(hermes::HermesEndPoint::new(addr, network)))
             }
             config::net::Peer::Ntt(addr) => {
-                ntt::NetworkCore::new(addr.parse().unwrap()).map(Peer::Ntt)
+                let mut addrs_iter = addr.to_socket_addrs().unwrap();
+                match addrs_iter.next() {
+                    Some(addr) =>
+                        ntt::NetworkCore::new(addr).map(Peer::Ntt),
+                    None => Err(unreachable!())
+                }
             }
         }
     }

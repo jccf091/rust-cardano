@@ -29,8 +29,8 @@ impl NetworkCore {
             Ok((connection, handle)) => {
                 println!("Connection: ok");
                 let mut core = Core::new().unwrap();
-                println!("Connection: core ok");
-                core.execute(connection).unwrap();
+                core.execute(connection.map(|_| {println!("Exited");}))
+                    .unwrap();
                 println!("Connection: core ok");
                 Ok(NetworkCore { handle, core })
             }
@@ -41,7 +41,11 @@ impl NetworkCore {
 
 impl Api for NetworkCore {
     fn get_tip(&mut self) -> Result<BlockHeader> {
-        self.handle.tip_header().map_err(|_| unreachable!()).wait()
+        println!("get_tip");
+        self.handle.tip_header().map_err(|e| {
+            println!("error {}", e);
+            unreachable!()
+        }).wait()
     }
 
     fn wait_for_new_tip(&mut self, _prev_tip: &HeaderHash) -> Result<BlockHeader> {

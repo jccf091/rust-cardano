@@ -188,8 +188,10 @@ where
     type GetTipFuture = RequestFuture<T::Header>;
 
     fn tip_header(&mut self) -> Self::GetTipFuture {
+        println!("tip_header: start");
         let (source, sink) = oneshot::channel();
         self.channel.unbounded_send(Request::Tip(source)).unwrap();
+        println!("tip_header: sent");
         RequestFuture(sink)
     }
 }
@@ -336,12 +338,14 @@ where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite,
     Tx: TransactionId + cbor_event::Serialize + cbor_event::Deserialize,
 {
+    println!("run_connection");
     let (sink, stream) = connection.split();
     let (sink_tx, sink_rx) = mpsc::unbounded();
     let sink2_tx = sink_tx.clone();
+    println!("run_connection:2");
     // process messages comming from the network.
     let stream = stream
-        .for_each(move |inbound| match inbound {
+        .for_each(move |inbound| {println!("inbound"); match inbound {
             Inbound::NothingExciting => future::ok(()),
             Inbound::BlockHeaders(lwcid, response) => {
                 sink_tx
@@ -363,13 +367,14 @@ where
                 future::ok(())
             }
             _ => future::ok(()),
-        })
+        }})
         .map_err(|_| ())
         .map(|_| ());
     // Accept all commands from the program and send that
     // further in the ppeline.
     let commands = input
         .for_each(move |request| {
+            println!("run_connection::command");
             sink2_tx.unbounded_send(Command::Request(request)).unwrap();
             future::ok(())
         })
@@ -381,6 +386,7 @@ where
         .subscribe(false)
         .map_err(|_err| ())
         .and_then(move |(_lwcid, sink)| {
+            println!("message");
             let cc: ConnectionState<B> = ConnectionState::new();
             sink_rx
                 .fold((sink, cc), move |(sink, mut cc), outbound| match outbound {
@@ -440,11 +446,13 @@ where
                                     .map(|_| ()),
                                 ),
                                 Some(Request::Tip(chan)) => {
+                                    println!("Request::Tip:prepare");
                                     chan.send(Err(core_client::Error::new(
                                         core_client::ErrorKind::Rpc,
                                         "unexpected response".to_string(),
                                     )))
                                     .unwrap();
+                                    println!("Request::Tip::sent");
                                     Either::A(future::ok(()))
                                 }
                                 None => Either::A(future::ok(())),
@@ -461,7 +469,9 @@ where
                         sink.new_light_connection()
                             .and_then(move |(lwcid, sink)| match request {
                                 Request::Tip(t) => {
+                                    println!("Request::Tip => prepare");
                                     cc.requests.insert(lwcid, Request::Tip(t));
+                                    println!("Request::Tip => insert");
                                     future::Either::A({
                                         sink.send(Message::GetBlockHeaders(
                                             lwcid,
@@ -505,7 +515,10 @@ where
                 .map_err(|_| ())
                 .map(|_| ())
         });
-    let cmds = commands.select(sink).map_err(|_err| ()).map(|_| ());
+    let cmds = commands.select(sink)
+                       .map_err(|_| ())
+                       .map(|_| ());
 
-    stream.select(cmds).then(|_| Ok(()))
+    println!("here!");
+    stream.select(cmds).then(|_| { println!("end"); Ok(()) })
 }
