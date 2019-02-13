@@ -504,7 +504,6 @@ where
                                         to: None,
                                     },
                                 ))
-                                .and_then(move |sink| sink.close_light_connection(lwcid))
                                 .and_then(|sink| future::ok((sink, cc)))
                             })
                         }
