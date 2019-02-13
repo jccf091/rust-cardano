@@ -101,7 +101,7 @@ impl<W: Sized + Write + Read> Connection<W> {
         let mut buf = vec![];
         protocol::append_lightweight_data(lwc, dat.len() as u32, &mut buf);
         self.emit("send lightcon data header", &buf)?;
-        self.emit("send lightcon data", &dat)
+        self.emit("send lightcon data", dbg!(&dat))
     }
 
     // emit utility

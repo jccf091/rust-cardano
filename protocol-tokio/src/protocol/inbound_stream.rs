@@ -138,6 +138,7 @@ where
     /// so we can decide wether to stop the connection or to recover from it.
     ///
     fn process_event(&mut self, event: nt::Event) -> Result<Inbound<B, Tx>, InboundError> {
+        println!("[{}:{}] process_event: {:?}", file!(), line!(), event);
         let msg: Message<B, Tx> = Message::from_nt_event(event);
         match msg {
             Message::CreateLightWeightConnectionId(lwcid) => {

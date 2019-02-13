@@ -57,16 +57,17 @@ pub mod net {
         pub fn new(addr: String) -> Self {
             if addr.starts_with(r"http://") || addr.starts_with(r"https://") {
                 Peer::http(addr)
-            } else /*if addr.starts_with(r"ntt://")*/ {
+            } 
+            else /*if addr.starts_with(r"ntt://")*/ {
                 println!("new ntt addr {}", addr);
                 let p = Peer::ntt(addr);
                 println!("peer ok {:?}", p);
                 p
 
-            } 
-            // else {
+            }
+            //else {
             //     Peer::native(addr)
-            // }
+            //}
         }
 
         /// force constructing a native `Peer`.

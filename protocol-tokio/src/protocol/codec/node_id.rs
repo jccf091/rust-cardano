@@ -16,7 +16,7 @@ impl From<u64> for NodeId {
 }
 impl Default for NodeId {
     fn default() -> Self {
-        NodeId(0)
+        NodeId(9990909)
     }
 }
 impl Deref for NodeId {

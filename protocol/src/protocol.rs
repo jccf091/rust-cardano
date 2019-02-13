@@ -198,14 +198,16 @@ impl<T: Write + Read> Connection<T> {
     pub fn handshake(&mut self, hs: &packet::Handshake) -> Result<()> {
         use ntt::protocol::{Command, ControlHeader};
         let lcid = LightweightConnectionId::initial();
+        println!("[{}:{}] new_with_nodeid", file!(), line!());
         let lc = LightConnection::new_with_nodeid(lcid, self.ntt.get_nonce());
 
         /* create a connection, then send the handshake data, followed by the node id associated with this connection */
+        println!("[{}:{}] new_light", file!(), line!());
         self.ntt.create_light(lcid)?;
+        println!("[{}:{}] handshake", file!(), line!());
         self.send_bytes(lcid, &packet::send_handshake(hs))?;
+        println!("[{}:{}] nodeid: {:?}", file!(), line!(), lc.node_id);
         self.send_nodeid(lcid, &lc.node_id.unwrap())?;
-
-        debug!("my node = {}", lc.node_id.unwrap());
 
         self.client_cons.insert(lcid, lc);
 
@@ -236,6 +238,7 @@ impl<T: Write + Read> Connection<T> {
             }
         };
 
+        println!("[{}:{}] creating initial light connection {}", file!(), line!(), lcid);
         info!("creating initial light connection {}", lcid);
         let server_bytes_hs = data_recv_on(self, siv)?;
         let mut de = Deserializer::from(Cursor::new(&server_bytes_hs));
@@ -259,11 +262,12 @@ impl<T: Write + Read> Connection<T> {
 
     pub fn new_light_connection(&mut self) -> Result<LightId> {
         let id = self.get_free_light_id();
-        trace!("creating light connection: {}", id);
+        println!("[{}:{}] creating light connection: {}", file!(), line!(), id);
 
         self.ntt.create_light(id)?;
 
         let lc = LightConnection::new_with_nodeid(id, self.ntt.get_nonce());
+        println!("[{}:{}] send nodeid: {:?}", file!(), line!(), lc.node_id);
         self.send_nodeid(id, &lc.node_id.unwrap())?;
         self.client_cons.insert(id, lc);
         Ok(id)
