@@ -493,9 +493,8 @@ where
                 sink.new_light_connection()
                     .and_then(move |(lwcid, sink)| match request {
                         Request::Tip(t) => {
-                            println!("Request::Tip => prepare");
+                            println!("Request::Tip => prepare({:?})", lwcid);
                             cc.requests.insert(lwcid, Request::Tip(t));
-                            println!("Request::Tip => insert");
                             future::Either::A({
                                 sink.send(Message::GetBlockHeaders(
                                     lwcid,

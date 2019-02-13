@@ -68,23 +68,22 @@ where
     pub fn new_light_connection(
         mut self,
     ) -> impl Future<Item = (nt::LightWeightConnectionId, Self), Error = OutboundError> {
-        println!("new_light_connection");
+        println!("{}:{} new_light_connection", file!(), line!());
         let lwcid = self.get_next_light_id();
         let node_id = self.get_next_node_id();
 
-        println!("new_light_connection: send");
+        println!("{}:{} new_light_connection: CreateLightWeighConnectionId", file!(), line!());
         self.send(Message::CreateLightWeightConnectionId(lwcid))
             .and_then(move |connection| {
-                println!("new_light_connection: create-node-id {:?} {:?}", lwcid, node_id);
+                println!("{}:{} new_light_connection: create-node-id {:?} {:?}", file!(), line!(), lwcid, node_id);
                 connection.send(Message::CreateNodeId(lwcid, node_id))
             })
             .and_then(move |connection| {
-                println!("new_light_connection: new connection");
+                println!("{}:{} new_light_connection: new connection (local, {:?}, {:?}", file!(), line!(), lwcid, node_id);
                 let light_weight_connection_state = LightWeightConnectionState::new(lwcid)
                     .remote_initiated(false)
                     .with_node_id(node_id);
 
-                println!("new_light_connection: new connection:insert");
                 connection
                     .state
                     .lock()
@@ -169,8 +168,10 @@ where
     type SinkError = OutboundError;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        let evt = item.to_nt_event();
+        println!("{}:{} send_start {:?}", file!(), line!(), evt);
         self.sink
-            .start_send(item.to_nt_event())
+            .start_send(evt)
             .map_err(OutboundError::IoError)
             .map(|async| async.map(Message::from_nt_event))
     }

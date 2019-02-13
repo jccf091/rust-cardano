@@ -280,6 +280,7 @@ where
     where
         F: FnOnce(nt::LightWeightConnectionId, A) -> Inbound<B, Tx>,
     {
+        println!("inbound_stream: forward_message");
         let state = self.state.lock().unwrap();
         let light_connection = state.server_handles.get(&lwcid).cloned();
         match light_connection {
