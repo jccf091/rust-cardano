@@ -164,7 +164,8 @@ where
 
     fn tip(&mut self) -> Self::TipFuture {
         let (source, sink) = oneshot::channel();
-        self.channel.unbounded_send(Request::Tip(source)).unwrap();
+        let result = self.channel.unbounded_send(Request::Tip(source));
+        dbg!(result);
         TipFuture(RequestFuture(sink))
     }
 
@@ -190,8 +191,8 @@ where
     fn tip_header(&mut self) -> Self::GetTipFuture {
         println!("tip_header: start");
         let (source, sink) = oneshot::channel();
-        self.channel.unbounded_send(Request::Tip(source)).unwrap();
-        println!("tip_header: sent");
+        let chan = self.channel.clone();
+        chan.unbounded_send(Request::Tip(source)).unwrap();
         RequestFuture(sink)
     }
 }
@@ -338,37 +339,55 @@ where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite,
     Tx: TransactionId + cbor_event::Serialize + cbor_event::Deserialize,
 {
-    println!("run_connection");
+    dbg!("run_connection: initialize");
     let (sink, stream) = connection.split();
     let (sink_tx, sink_rx) = mpsc::unbounded();
     let sink2_tx = sink_tx.clone();
-    println!("run_connection:2");
     // process messages comming from the network.
     let stream = stream
-        .for_each(move |inbound| {println!("inbound"); match inbound {
-            Inbound::NothingExciting => future::ok(()),
+        .for_each(move |inbound| {dbg!("inbound"); match inbound {
+            Inbound::NothingExciting => {
+                println!("inbound-nothing-exciting");
+                future::ok(())
+            },
             Inbound::BlockHeaders(lwcid, response) => {
+                println!("inbound-block-headers: {:?}", lwcid);
                 sink_tx
                     .unbounded_send(Command::BlockHeaders(lwcid, response))
                     .unwrap();
                 future::ok(())
-            }
+            },
             Inbound::Block(lwcid, response) => {
+                println!("inbound-block: {:?}", lwcid);
                 sink_tx
                     .unbounded_send(Command::Blocks(lwcid, response))
                     .unwrap();
                 future::ok(())
-            }
-            Inbound::TransactionReceived(_lwcid, _response) => future::ok(()),
+            },
+            Inbound::TransactionReceived(_lwcid, _response) => {
+                println!("inbound-tx: {:?}", _lwcid);
+                future::ok(())
+            },
             Inbound::CloseConnection(lwcid) => {
+                println!("inbound-close: {:?}", lwcid);
                 sink_tx
                     .unbounded_send(Command::CloseConnection(lwcid))
                     .unwrap();
                 future::ok(())
+            },
+            Inbound::NewConnection(lwcid) => {
+                println!("inbound-new-connection: {:?}", lwcid);
+                future::ok(())
             }
-            _ => future::ok(()),
+            Inbound::NewNode(lwcid, node_id) => {
+                println!("inbound-new-node: {:?}", lwcid);
+                future::ok(())
+            }
+            _x => {
+                future::ok(())
+            },
         }})
-        .map_err(|_| ())
+        .map_err(|e| { println!("inbound-error: {:?}", e); () })
         .map(|_| ());
     // Accept all commands from the program and send that
     // further in the ppeline.
@@ -480,6 +499,7 @@ where
                                                 to: None,
                                             },
                                         ))
+                                        .and_then(move |sink| sink.close_light_connection(lwcid))
                                         .and_then(|sink| future::ok((sink, cc)))
                                     })
                                 }
@@ -493,22 +513,28 @@ where
                                     })
                                 }
                             })
-                            .map_err(|_| ()),
+                            .map_err(|e| {println!("{:?}", e); ()} ),
                     ),
                     Command::CloseConnection(lwcid) => V::A7({
-                        match cc.requests.remove(&lwcid) {
-                            Some(Request::Tip(chan)) => {
-                                chan.send(Err(core_client::Error::new(
-                                    core_client::ErrorKind::Rpc,
-                                    "unexpected close",
-                                )))
-                                .unwrap();
-                            }
-                            Some(Request::Block(mut chan, _, _)) => {
-                                chan.close().unwrap();
-                            }
-                            _ => (),
-                        };
+                        println!("command-close-connection: {:?}", lwcid);
+                        //match cc.requests.remove(&lwcid) {
+                        //    Some(Request::Tip(chan)) => {
+                        //        println!("command-close-tip");
+                        //        chan.send(Err(core_client::Error::new(
+                        //            core_client::ErrorKind::Rpc,
+                        //            "unexpected close",
+                        //        )))
+                        //        .unwrap();
+                        //    }
+                        //    Some(Request::Block(mut chan, _, _)) => {
+                        //        println!("command-close-block");
+                        //        chan.close().unwrap();
+                        //    }
+                        //    _ => {
+                        //        println!("command-close-nothing");
+                        //        ()
+                        //    },
+                        //};
                         future::ok((sink, cc))
                     }),
                 })
@@ -518,7 +544,6 @@ where
     let cmds = commands.select(sink)
                        .map_err(|_| {println!("error4"); ()})
                        .map(|_| { println!("ok5"); ()});
-
-    println!("here!");
+    dbg!("run_connection: start");
     stream.select(cmds).then(|_| { println!("end"); Ok(()) })
 }

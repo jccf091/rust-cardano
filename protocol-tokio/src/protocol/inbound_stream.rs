@@ -76,6 +76,15 @@ pub struct InboundStream<T, B: property::Block, Tx: property::TransactionId> {
     state: Arc<Mutex<ConnectionState>>,
     phantoms: PhantomData<(B, Tx)>,
 }
+
+impl<T, B: property::Block, Tx: property::TransactionId> Drop
+    for InboundStream<T, B, Tx>
+{
+    fn drop(&mut self) {
+        println!("dropping inbound connection");
+    }
+}
+
 impl<T: AsyncRead, B: property::Block + property::HasHeader, Tx: property::TransactionId> Stream
     for InboundStream<T, B, Tx>
 where
@@ -112,6 +121,7 @@ where
     Tx: cbor_event::Serialize,
 {
     pub fn new(stream: SplitStream<nt::Connection<T>>, state: Arc<Mutex<ConnectionState>>) -> Self {
+        println!("new inbound stream");
         InboundStream {
             stream,
             state,
@@ -238,6 +248,7 @@ where
         lwcid: nt::LightWeightConnectionId,
         node_id: NodeId,
     ) -> Result<Inbound<B, Tx>, InboundError> {
+        println!("process_ack_node_id: {:?} {:?}", lwcid, node_id);
         let mut state = self.state.lock().unwrap();
         match state.server_handles.get_mut(&lwcid) {
             None => {

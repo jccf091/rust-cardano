@@ -118,6 +118,7 @@ impl<
         Tx: cbor_event::Serialize,
         Tx: cbor_event::Deserialize,
     {
+        println!("split");
         let state = self.state;
         let (sink, stream) = self.connection.split();
 

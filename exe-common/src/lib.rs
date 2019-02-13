@@ -17,6 +17,7 @@ extern crate serde_yaml;
 
 extern crate futures;
 extern crate hyper;
+extern crate tokio;
 extern crate tokio_core;
 
 extern crate network_core;

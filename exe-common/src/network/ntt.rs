@@ -1,6 +1,6 @@
 use futures::Future;
-use futures::future::Executor;
 use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 use network::api::{Api, BlockRef};
 use network::Result;
@@ -18,7 +18,7 @@ use cardano::{
 
 pub struct NetworkCore {
     handle: ntt::ClientHandle<Block, TxId>,
-    pub core: Core,
+    pub rt: Runtime,
 }
 
 impl NetworkCore {
@@ -27,12 +27,13 @@ impl NetworkCore {
         let connecting = ntt::connect(sockaddr);
         match connecting.wait() {
             Ok((connection, handle)) => {
-                println!("Connection: ok");
-                let mut core = Core::new().unwrap();
-                core.execute(connection.map(|_| {println!("Exited");}))
-                    .unwrap();
-                println!("Connection: core ok");
-                Ok(NetworkCore { handle, core })
+                dbg!("Connection: ok");
+                // FIXME: use default executor, or take
+                // executor argument before merge.
+                let mut rt = Runtime::new().unwrap();
+                rt.spawn(connection.map(|_| {println!("Exited");}));
+                dbg!("Connection: core ok");
+                Ok(NetworkCore{ handle, rt })
             }
             Err(_err) => unimplemented!(),
         }

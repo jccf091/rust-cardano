@@ -55,6 +55,7 @@ where
     Tx: cbor_event::Deserialize,
 {
     pub fn new(sink: SplitSink<nt::Connection<T>>, state: Arc<Mutex<ConnectionState>>) -> Self {
+        println!("OutboundSink: new");
         OutboundSink {
             sink,
             state,
@@ -67,16 +68,23 @@ where
     pub fn new_light_connection(
         mut self,
     ) -> impl Future<Item = (nt::LightWeightConnectionId, Self), Error = OutboundError> {
+        println!("new_light_connection");
         let lwcid = self.get_next_light_id();
         let node_id = self.get_next_node_id();
 
+        println!("new_light_connection: send");
         self.send(Message::CreateLightWeightConnectionId(lwcid))
-            .and_then(move |connection| connection.send(Message::CreateNodeId(lwcid, node_id)))
             .and_then(move |connection| {
+                println!("new_light_connection: create-node-id {:?} {:?}", lwcid, node_id);
+                connection.send(Message::CreateNodeId(lwcid, node_id))
+            })
+            .and_then(move |connection| {
+                println!("new_light_connection: new connection");
                 let light_weight_connection_state = LightWeightConnectionState::new(lwcid)
                     .remote_initiated(false)
                     .with_node_id(node_id);
 
+                println!("new_light_connection: new connection:insert");
                 connection
                     .state
                     .lock()
@@ -93,10 +101,12 @@ where
         self,
         keep_alive: KeepAlive,
     ) -> impl Future<Item = (nt::LightWeightConnectionId, Self), Error = OutboundError> {
+        println!("OutboundSink::subscribe");
         self.new_light_connection()
             .and_then(move |(lwcid, connection)| {
+                println!("OutboundSink::subscribe::done");
                 connection
-                    .send(Message::Subscribe(lwcid, keep_alive))
+                    .send(Message::Subscribe(dbg!(lwcid), keep_alive))
                     .map(move |connection| (lwcid, connection))
             })
     }

@@ -27,7 +27,8 @@ network-core = { path = "../network-core" }
 
 futures = "0.1"
 hyper = "0.11"
-tokio-core = "0.1"
+tokio = "0.1.15"
+tokio-core = "0.1.15"
 
 [dependencies.cardano]
 path = "../cardano"

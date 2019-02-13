@@ -71,22 +71,28 @@ where
         loop {
             let connection = match &mut self.state {
                 ConnectingState::Consumed => {
+                    dbg!("already connected");
                     return Err(ConnectingError::AlreadyConnected);
                 }
                 ConnectingState::NtConnecting(ref mut nt) => {
+                    dbg!("connecting");
                     let nt = try_ready!(nt.poll());
                     Transition::Connected(Connection::new(nt))
                 }
                 ConnectingState::SendHandshake(ref mut send_all) => {
+                    dbg!("send handshake");
                     let (connection, _) = try_ready!(send_all.poll());
+                    dbg!("Handshake sent");
                     debug!("Handshake sent");
                     Transition::HandshakeSent(connection)
                 }
                 ConnectingState::ExpectNewLightWeightId(ref mut connection) => {
+                    dbg!("waiting lightweight");
                     let (e, connection) = try_ready!(connection.poll().map_err(|(e, _)| e));
                     let lwcid = match e {
                         None => return Err(ConnectingError::ConnectionClosed),
                         Some(e) => {
+                            dbg!("waiting control");
                             if let Ok((nt::ControlHeader::CreateNewConnection, lwcid)) =
                                 e.expect_control()
                             {
@@ -96,14 +102,17 @@ where
                             }
                         }
                     };
+                    dbg!("peer created");
                     debug!("peer created LightWeightConnectionId {:?}", lwcid);
                     Transition::ReceivedNewLightWeightId(connection)
                 }
                 ConnectingState::ExpectHandshake(ref mut connection) => {
+                    dbg!("expect handshake");
                     let (e, connection) = try_ready!(connection.poll().map_err(|(e, _)| e));
                     let (lwcid, peer_handshake) = match e {
                         None => return Err(ConnectingError::ConnectionClosed),
                         Some(e) => {
+                            dbg!("expect data");
                             if let Ok((lwcid, bytes)) = e.expect_data() {
                                 let bytes: Vec<_> = bytes.into_iter().collect();
                                 let mut de = Deserializer::from(Cursor::new(&bytes));
@@ -116,6 +125,7 @@ where
                             }
                         }
                     };
+                    println!("peer sent handshake {:?} {:#?}", lwcid, peer_handshake);
                     debug!("peer sent handshake {:?} {:#?}", lwcid, peer_handshake);
                     Transition::ReceivedHandshake(connection)
                 }
@@ -135,6 +145,7 @@ where
                         }
                     };
                     debug!("peer sent new node {:?} 0x{:x} {:?}", lwcid, ack, node_id);
+                    println!("peer sent new node {:?} 0x{:x} {:?}", lwcid, ack, node_id);
                     Transition::ReceivedNodeId(connection)
                 }
             };
