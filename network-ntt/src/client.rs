@@ -37,6 +37,7 @@ where
     TcpStream::connect(&sockaddr)
         .map_err(move |err| core_client::Error::new(core_client::ErrorKind::Rpc, err))
         .and_then(move |stream| {
+            stream.set_nodelay(true);
             protocol::Connection::connect(stream)
                 .map_err(move |err| core_client::Error::new(core_client::ErrorKind::Rpc, err))
                 .and_then(move |connection: protocol_tokio::Connection<_, B, Tx>| {
