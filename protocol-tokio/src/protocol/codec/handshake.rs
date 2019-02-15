@@ -17,7 +17,7 @@ use super::{MessageCode, MessageType};
 pub struct ProtocolMagic(u32);
 impl Default for ProtocolMagic {
     fn default() -> Self {
-        ProtocolMagic(764824073)
+        ProtocolMagic(1097911063)
     }
 }
 
