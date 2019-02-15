@@ -351,25 +351,16 @@ where
                     sink_tx
                         .unbounded_send(Command::CloseConnection(lwcid))
                         .unwrap();
-                    future::ok(())
-                }
-                Inbound::NewConnection(lwcid) => {
-                    println!("inbound-new-connection: {:?}", lwcid);
-                    future::ok(())
-                }
-                Inbound::NewNode(lwcid, _node_id) => {
-                    println!("inbound-new-node: {:?}", lwcid);
-                    future::ok(())
                 }
                 Inbound::Data(lwcid, data) => {
                     println!("inbound-data: {:?}", data);
                     sink_tx
                         .unbounded_send(Command::Reply(lwcid, data.to_vec()))
                         .unwrap();
-                    future::ok(())
                 }
-                _x => future::ok(()),
+                _x => {},
             }
+            future::ok(())
         })
         .map_err(|e| {
             println!("inbound-error: {:?}", e);
