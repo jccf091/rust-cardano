@@ -5,7 +5,7 @@ use cardano::{
 };
 use config;
 use network::api::{BlockRef, *};
-use network::{hermes, native, ntt, Result};
+use network::{hermes, native, ntt, Result, Error};
 use std::net::ToSocketAddrs;
 
 /// network object to handle a peer connection and redirect to constructing
@@ -36,7 +36,9 @@ impl Peer {
                 match addrs_iter.next() {
                     Some(addr) =>
                         ntt::NetworkCore::new(addr).map(Peer::Ntt),
-                    None => Err(unreachable!())
+                    None => Err(
+                        Error::from(std::io::Error::new(std::io::ErrorKind::Other, "can't parse address"))
+                    )
                 }
             }
         }

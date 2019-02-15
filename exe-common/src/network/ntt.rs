@@ -1,9 +1,8 @@
 use futures::Future;
-use tokio_core::reactor::Core;
 use tokio::runtime::Runtime;
 
 use network::api::{Api, BlockRef};
-use network::Result;
+use network::{Result, Error};
 
 //to_socket_addr
 use network_core::client::block::HeaderService;
@@ -23,16 +22,15 @@ pub struct NetworkCore {
 
 impl NetworkCore {
     pub fn new(sockaddr: SocketAddr) -> Result<Self> {
-        println!("New network core: {}", sockaddr);
+        trace!("New network core: {}", sockaddr);
         let connecting = ntt::connect(sockaddr);
         match connecting.wait() {
             Ok((connection, handle)) => {
-                dbg!("Connection: ok");
+                trace!("Connection: ok");
                 // FIXME: use default executor, or take
                 // executor argument before merge.
                 let mut rt = Runtime::new().unwrap();
                 rt.spawn(connection.map(|_| {println!("Exited");}));
-                dbg!("Connection: core ok");
                 Ok(NetworkCore{ handle, rt })
             }
             Err(_err) => unimplemented!(),
@@ -42,10 +40,8 @@ impl NetworkCore {
 
 impl Api for NetworkCore {
     fn get_tip(&mut self) -> Result<BlockHeader> {
-        println!("get_tip");
         self.handle.tip_header().map_err(|e| {
-            println!("error {}", e);
-            unreachable!()
+            Error::from(std::io::Error::new(std::io::ErrorKind::Other, e))
         }).wait()
     }
 
