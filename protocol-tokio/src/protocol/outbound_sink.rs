@@ -55,7 +55,6 @@ where
     Tx: cbor_event::Deserialize,
 {
     pub fn new(sink: SplitSink<nt::Connection<T>>, state: Arc<Mutex<ConnectionState>>) -> Self {
-        println!("OutboundSink: new");
         OutboundSink {
             sink,
             state,
@@ -68,18 +67,16 @@ where
     pub fn new_light_connection(
         mut self,
     ) -> impl Future<Item = (nt::LightWeightConnectionId, Self), Error = OutboundError> {
-        println!("[{}:{}] new_light_connection", file!(), line!());
+        trace!("new_light_connection");
         let lwcid = self.get_next_light_id();
         let node_id = self.get_next_node_id();
-
-        println!("[{}:{}] new_light_connection: CreateLightWeighConnectionId", file!(), line!());
         self.send(Message::CreateLightWeightConnectionId(lwcid))
             .and_then(move |connection| {
-                println!("[{}:{}] new_light_connection: create-node-id {:?} {:?}", file!(), line!(), lwcid, node_id);
+                trace!("new_light_connection: create-node-id {:?} {:?}", lwcid, node_id);
                 connection.send(Message::CreateNodeId(lwcid, node_id))
             })
             .and_then(move |connection| {
-                println!("[{}:{}] new_light_connection: new connection (local, {:?}, {:?}", file!(), line!(), lwcid, node_id);
+                trace!("new_light_connection: new connection (local, {:?}, {:?}", lwcid, node_id);
                 let light_weight_connection_state = LightWeightConnectionState::new(lwcid)
                     .remote_initiated(false)
                     .with_node_id(node_id);
@@ -100,7 +97,7 @@ where
         self,
         keep_alive: KeepAlive,
     ) -> impl Future<Item = (nt::LightWeightConnectionId, Self), Error = OutboundError> {
-        println!("OutboundSink::subscribe");
+        trace!("OutboundSink::subscribe");
         self.new_light_connection()
             .and_then(move |(lwcid, connection)| {
                 println!("OutboundSink::subscribe::done");
@@ -169,19 +166,16 @@ where
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         let evt = item.to_nt_event();
-        println!("[{}:{}] send_start {:?}", file!(), line!(), evt);
         self.sink
             .start_send(evt)
             .map_err(OutboundError::IoError)
             .map(|async| {
                 let x = async.map(Message::from_nt_event);
-                println!("[{}:{}] send_start:last", file!(), line!());
                 x
             })
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        println!("[{}:{}] poll_complete", file!(), line!());
         self.sink.poll_complete().map_err(OutboundError::IoError)
     }
 

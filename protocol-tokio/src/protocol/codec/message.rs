@@ -175,13 +175,10 @@ where
     }
 
     pub fn expect_bytes(event: nt::Event) -> Result<Self, nt::Event> {
-        println!("[{}:{}] expect bytes: data {:?}", file!(), line!(), event);
         let (lwcid, bytes) = event.expect_data()?;
-        println!("[{}:{}] expect bytes: {:?}", file!(), line!(), lwcid);
         match decode_node_ack_or_syn(lwcid, &bytes) {
             Some(msg) => Ok(msg),
             None => {
-                println!("[{}:{}] expect bytes: data {}", file!(), line!(), cardano::util::hex::encode(&bytes));
                 Ok(Message::Bytes(lwcid, bytes))
             }
         }

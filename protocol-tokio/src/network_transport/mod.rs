@@ -49,7 +49,6 @@ impl<T: AsyncWrite> Sink for Connection<T> {
     type SinkError = io::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        println!("[{}:{}] start_send: {:?}", file!(), line!(), item);
         self.0.start_send(item)
     }
 

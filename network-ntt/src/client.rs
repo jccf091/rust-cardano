@@ -186,7 +186,7 @@ where
     type GetTipFuture = RequestFuture<T::Header>;
 
     fn tip_header(&mut self) -> Self::GetTipFuture {
-        println!("tip_header: start");
+        trace!("tip_header: start");
         let (source, sink) = oneshot::channel();
         let chan = self.channel.clone();
         chan.unbounded_send(Request::Tip(source)).unwrap();
@@ -333,27 +333,25 @@ where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite,
     Tx: TransactionId + cbor_event::Serialize + cbor_event::Deserialize,
 {
-    dbg!("run_connection: initialize");
+    trace!("run_connection: initialize");
     let (sink, stream) = connection.split();
     let (sink_tx, sink_rx) = mpsc::unbounded();
     let sink2_tx = sink_tx.clone();
     // process messages comming from the network.
     let stream = stream
         .for_each(move |inbound| {
-            dbg!("inbound");
             match inbound {
                 Inbound::NothingExciting => {
-                    println!("inbound-nothing-exciting");
-                    future::ok(())
+                    trace!("inbound-nothing-exciting");
                 }
                 Inbound::CloseConnection(lwcid) => {
-                    println!("inbound-close: {:?}", lwcid);
+                    trace!("inbound-close: {:?}", lwcid);
                     sink_tx
                         .unbounded_send(Command::CloseConnection(lwcid))
                         .unwrap();
                 }
                 Inbound::Data(lwcid, data) => {
-                    println!("inbound-data: {:?}", data);
+                    trace!("inbound-data: [..]");
                     sink_tx
                         .unbounded_send(Command::Reply(lwcid, data.to_vec()))
                         .unwrap();
@@ -363,15 +361,14 @@ where
             future::ok(())
         })
         .map_err(|e| {
-            println!("inbound-error: {:?}", e);
-            ()
+            trace!("inbound-error: {:?}", e);
         })
         .map(|_| ());
     // Accept all commands from the program and send that
     // further in the ppeline.
     let commands = input
         .for_each(move |request| {
-            println!("run_connection::command");
+            trace!("run_connection::command");
             sink2_tx.unbounded_send(Command::Request(request)).unwrap();
             future::ok(())
         })
@@ -425,7 +422,6 @@ where
                 sink.new_light_connection()
                     .and_then(move |(lwcid, sink)| match request {
                         Request::Tip(t) => {
-                            println!("Request::Tip => prepare({:?})", lwcid);
                             cc.requests.insert(lwcid, Request::Tip(t));
                             future::Either::A({
                                 sink.send(Message::GetBlockHeaders(
@@ -454,10 +450,10 @@ where
                     }),
             ),
             Command::CloseConnection(lwcid) => V::A5({
-                println!("command-close-connection: {:?}", lwcid);
+                trace!("command-close-connection: {:?}", lwcid);
                 match cc.requests.remove(&lwcid) {
                     Some(Request::Tip(chan)) => {
-                        println!("command-close-tip");
+                        trace!("unresolved-tip");
                         chan.send(Err(core_client::Error::new(
                             core_client::ErrorKind::Rpc,
                             "unexpected close",
@@ -465,7 +461,7 @@ where
                         .unwrap();
                     }
                     Some(Request::Block(mut chan, _, _)) => {
-                        println!("command-close-block");
+                        trace!("block closed");
                         chan.close().unwrap();
                     }
                     _ => {
@@ -481,16 +477,14 @@ where
     let cmds = commands
         .select(sink)
         .map_err(|_| {
-            println!("error4");
             ()
         })
         .map(|_| {
-            println!("ok5");
             ()
         });
-    dbg!("run_connection: start");
+    trace!("run_connection: start");
     stream.select(cmds).then(|_| {
-        println!("end");
+        trace!("end");
         Ok(())
     })
 }

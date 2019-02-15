@@ -77,14 +77,6 @@ pub struct InboundStream<T, B: property::Block, Tx: property::TransactionId> {
     phantoms: PhantomData<(B, Tx)>,
 }
 
-impl<T, B: property::Block, Tx: property::TransactionId> Drop
-    for InboundStream<T, B, Tx>
-{
-    fn drop(&mut self) {
-        println!("dropping inbound connection");
-    }
-}
-
 impl<T: AsyncRead, B: property::Block + property::HasHeader, Tx: property::TransactionId> Stream
     for InboundStream<T, B, Tx>
 where
@@ -121,7 +113,6 @@ where
     Tx: cbor_event::Serialize,
 {
     pub fn new(stream: SplitStream<nt::Connection<T>>, state: Arc<Mutex<ConnectionState>>) -> Self {
-        println!("new inbound stream");
         InboundStream {
             stream,
             state,
@@ -138,7 +129,7 @@ where
     /// so we can decide wether to stop the connection or to recover from it.
     ///
     fn process_event(&mut self, event: nt::Event) -> Result<Inbound<B, Tx>, InboundError> {
-        println!("[{}:{}] process_event: {:?}", file!(), line!(), event);
+        trace!("process_event: {:?}", event);
         let msg: Message<B, Tx> = Message::from_nt_event(event);
         match msg {
             Message::CreateLightWeightConnectionId(lwcid) => {
@@ -249,7 +240,6 @@ where
         lwcid: nt::LightWeightConnectionId,
         node_id: NodeId,
     ) -> Result<Inbound<B, Tx>, InboundError> {
-        println!("process_ack_node_id: {:?} {:?}", lwcid, node_id);
         let mut state = self.state.lock().unwrap();
         match state.server_handles.get_mut(&lwcid) {
             None => {
@@ -281,7 +271,6 @@ where
     where
         F: FnOnce(nt::LightWeightConnectionId, A) -> Inbound<B, Tx>,
     {
-        println!("inbound_stream: forward_message");
         let state = self.state.lock().unwrap();
         let light_connection = state.server_handles.get(&lwcid).cloned();
         match light_connection {

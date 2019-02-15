@@ -4,6 +4,8 @@
 //! and act as message passing between the other modules (blockchain,
 //! transactions...);
 
+#[macro_use]
+extern crate log;
 extern crate protocol_tokio as protocol;
 
 pub mod client;

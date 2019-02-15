@@ -10,7 +10,7 @@ authors = [ "Nicolas Di Prima <nicolas.diprima@iohk.io>"
 edition = "2018"
 
 [dependencies]
-slog = "^2.4.1"
+log = "^0.4.5"
 futures = "^0.1"
 tokio = "^0.1"
 network-core = { path = "../network-core" }
