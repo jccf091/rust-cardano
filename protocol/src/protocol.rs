@@ -668,6 +668,7 @@ pub mod command {
         fn result(&self, connection: &mut Connection<W>, id: LightId) -> Result<Self::Output> {
             // require the initial header
             let dat = connection.wait_msg(id)?;
+            println!("data: {}", cardano::util::hex::encode(&dat));
             match decode_sum_type(&dat) {
                 None => Err(Error::UnexpectedResponse),
                 Some((0, dat)) => {

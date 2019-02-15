@@ -20,6 +20,7 @@ tokio-codec = "^0.1.1"
 bytes = "^0.4.10"
 log   = "^0.4.5"
 chain-core = { path = "../chain-core" }
+cardano = { path = "../cardano" }
 
 [dev-dependencies]
 quickcheck = "^0.7.1"
