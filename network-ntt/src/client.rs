@@ -3,7 +3,7 @@ use future::Either;
 use futures::{sync::mpsc, sync::oneshot};
 use network_core::client::{self as core_client, block::BlockService, block::HeaderService};
 use protocol::{
-    network_transport::LightWeightConnectionId, protocol::BlockHeaders, protocol::GetBlockHeaders,
+    network_transport::LightWeightConnectionId, protocol::GetBlockHeaders,
     protocol::GetBlocks, Inbound, Message, Response,
 };
 use std::collections::HashMap;
@@ -37,7 +37,6 @@ where
     TcpStream::connect(&sockaddr)
         .map_err(move |err| core_client::Error::new(core_client::ErrorKind::Rpc, err))
         .and_then(move |stream| {
-            stream.set_nodelay(true);
             protocol::Connection::connect(stream)
                 .map_err(move |err| core_client::Error::new(core_client::ErrorKind::Rpc, err))
                 .and_then(move |connection: protocol_tokio::Connection<_, B, Tx>| {
@@ -163,8 +162,7 @@ where
 
     fn tip(&mut self) -> Self::TipFuture {
         let (source, sink) = oneshot::channel();
-        let result = self.channel.unbounded_send(Request::Tip(source));
-        dbg!(result);
+        self.channel.unbounded_send(Request::Tip(source));
         TipFuture(RequestFuture(sink))
     }
 
@@ -292,35 +290,26 @@ impl<B: Block + HasHeader> ConnectionState<B> {
 
 enum Command<B: Block + HasHeader, Tx: TransactionId> {
     Message(Message<B, Tx>),
-    BlockHeaders(
-        LightWeightConnectionId,
-        Response<BlockHeaders<B::Header>, String>,
-    ),
-    Blocks(LightWeightConnectionId, Response<B, String>),
-    Transaction(LightWeightConnectionId, Response<bool, String>),
     Request(Request<B>),
     CloseConnection(LightWeightConnectionId),
+    Reply(LightWeightConnectionId, Vec<u8>),
 }
 
-enum V<A1, A2, A3, A4, A5, A6, A7> {
+enum V<A1, A2, A3, A4, A5> {
     A1(A1),
     A2(A2),
     A3(A3),
     A4(A4),
     A5(A5),
-    A6(A6),
-    A7(A7),
 }
 
-impl<A1, A2, A3, A4, A5, A6, A7> Future for V<A1, A2, A3, A4, A5, A6, A7>
+impl<A1, A2, A3, A4, A5> Future for V<A1, A2, A3, A4, A5>
 where
     A1: Future,
     A2: Future<Item = A1::Item, Error = A1::Error>,
     A3: Future<Item = A1::Item, Error = A1::Error>,
     A4: Future<Item = A1::Item, Error = A1::Error>,
     A5: Future<Item = A1::Item, Error = A1::Error>,
-    A6: Future<Item = A1::Item, Error = A1::Error>,
-    A7: Future<Item = A1::Item, Error = A1::Error>,
 {
     type Item = A1::Item;
     type Error = A1::Error;
@@ -332,8 +321,6 @@ where
             V::A3(ref mut x) => x.poll(),
             V::A4(ref mut x) => x.poll(),
             V::A5(ref mut x) => x.poll(),
-            V::A6(ref mut x) => x.poll(),
-            V::A7(ref mut x) => x.poll(),
         }
     }
 }
@@ -359,24 +346,6 @@ where
                     println!("inbound-nothing-exciting");
                     future::ok(())
                 }
-                Inbound::BlockHeaders(lwcid, response) => {
-                    println!("inbound-block-headers: {:?}", lwcid);
-                    sink_tx
-                        .unbounded_send(Command::BlockHeaders(lwcid, response))
-                        .unwrap();
-                    future::ok(())
-                }
-                Inbound::Block(lwcid, response) => {
-                    println!("inbound-block: {:?}", lwcid);
-                    sink_tx
-                        .unbounded_send(Command::Blocks(lwcid, response))
-                        .unwrap();
-                    future::ok(())
-                }
-                Inbound::TransactionReceived(_lwcid, _response) => {
-                    println!("inbound-tx: {:?}", _lwcid);
-                    future::ok(())
-                }
                 Inbound::CloseConnection(lwcid) => {
                     println!("inbound-close: {:?}", lwcid);
                     sink_tx
@@ -388,8 +357,15 @@ where
                     println!("inbound-new-connection: {:?}", lwcid);
                     future::ok(())
                 }
-                Inbound::NewNode(lwcid, node_id) => {
+                Inbound::NewNode(lwcid, _node_id) => {
                     println!("inbound-new-node: {:?}", lwcid);
+                    future::ok(())
+                }
+                Inbound::Data(lwcid, data) => {
+                    println!("inbound-data: {:?}", data);
+                    sink_tx
+                        .unbounded_send(Command::Reply(lwcid, data.to_vec()))
+                        .unwrap();
                     future::ok(())
                 }
                 _x => future::ok(()),
@@ -426,71 +402,35 @@ where
             Command::Message(message) => {
                 V::A2(sink.send(message).map_err(|_err| ()).map(|x| (x, cc)))
             }
-            Command::BlockHeaders(lwid, resp) => {
-                let request = cc.requests.remove(&lwid);
-                V::A3(match request {
-                    Some(Request::Tip(chan)) => match resp {
-                        Response::Ok(x) => {
-                            let s = x.0[0].clone();
-                            chan.send(Ok(s)).unwrap();
-                            Either::A(future::ok((sink, cc)))
-                        }
-                        Response::Err(x) => {
-                            chan.send(Err(core_client::Error::new(core_client::ErrorKind::Rpc, x)))
-                                .unwrap();
-                            Either::A(future::ok((sink, cc)))
-                        }
+            Command::Reply(lwid, bytes) => {
+                match cc.requests.remove(&lwid) {
+                    Some(Request::Block(_chan, _a, _b)) => {
+                        V::A3(Either::A(future::ok((sink,cc))))
                     },
-                    Some(Request::Block(chan, _, _)) => Either::B(
-                        chan.send(Err(core_client::Error::new(
-                            core_client::ErrorKind::Rpc,
-                            "unexpected reply".to_string(),
-                        )))
-                        .map_err(|_| ())
-                        .and_then(|_| future::ok((sink, cc))),
-                    ),
-                    None => Either::A(future::ok((sink, cc))),
-                })
-            }
-            Command::Blocks(lwid, resp) => {
-                let val = cc.requests.remove(&lwid);
-                V::A4(
-                    match val {
-                        Some(Request::Block(chan, a, b)) => Either::B(
-                            match resp {
-                                Response::Ok(x) => {
-                                    cc.requests.insert(lwid, Request::Block(chan.clone(), a, b));
-                                    chan.send(Ok(x))
-                                }
-                                Response::Err(x) => chan.send(Err(core_client::Error::new(
-                                    core_client::ErrorKind::Rpc,
-                                    x,
-                                ))),
+                    Some(Request::Tip(chan)) => {
+                        let mut raw = cbor_event::de::Deserializer::from(std::io::Cursor::new(bytes));
+                        let value: Response<Vec<H>, String> =
+                            raw.deserialize_complete().unwrap();
+                        match value {
+                            Response::Ok(x) => {
+                                let s = x[0].clone();
+                                chan.send(Ok(s)).unwrap();
                             }
-                            .map_err(|_| ())
-                            .map(|_| ()),
-                        ),
-                        Some(Request::Tip(chan)) => {
-                            println!("Request::Tip:prepare");
-                            chan.send(Err(core_client::Error::new(
-                                core_client::ErrorKind::Rpc,
-                                "unexpected response".to_string(),
-                            )))
-                            .unwrap();
-                            println!("Request::Tip::sent");
-                            Either::A(future::ok(()))
-                        }
-                        None => Either::A(future::ok(())),
-                    }
-                    .and_then(move |_| {
-                        sink.close_light_connection(lwid)
+                            Response::Err(x) => {
+                                chan.send(Err(core_client::Error::new(core_client::ErrorKind::Rpc, x)))
+                                .unwrap();
+                            }
+                        };
+                        V::A3(Either::B(sink.close_light_connection(lwid)
                             .and_then(|x| future::ok((x, cc)))
-                            .map_err(|_| ())
-                    }),
-                )
+                            .map_err(|_| ())))
+                    },
+                    None => {
+                        V::A3(Either::A(future::ok((sink,cc))))
+                    },
+                }
             }
-            Command::Transaction(_, _) => V::A5(future::ok((sink, cc))),
-            Command::Request(request) => V::A6(
+            Command::Request(request) => V::A4(
                 sink.new_light_connection()
                     .and_then(move |(lwcid, sink)| match request {
                         Request::Tip(t) => {
@@ -522,26 +462,26 @@ where
                         ()
                     }),
             ),
-            Command::CloseConnection(lwcid) => V::A7({
+            Command::CloseConnection(lwcid) => V::A5({
                 println!("command-close-connection: {:?}", lwcid);
-                //match cc.requests.remove(&lwcid) {
-                //    Some(Request::Tip(chan)) => {
-                //        println!("command-close-tip");
-                //        chan.send(Err(core_client::Error::new(
-                //            core_client::ErrorKind::Rpc,
-                //            "unexpected close",
-                //        )))
-                //        .unwrap();
-                //    }
-                //    Some(Request::Block(mut chan, _, _)) => {
-                //        println!("command-close-block");
-                //        chan.close().unwrap();
-                //    }
-                //    _ => {
-                //        println!("command-close-nothing");
-                //        ()
-                //    },
-                //};
+                match cc.requests.remove(&lwcid) {
+                    Some(Request::Tip(chan)) => {
+                        println!("command-close-tip");
+                        chan.send(Err(core_client::Error::new(
+                            core_client::ErrorKind::Rpc,
+                            "unexpected close",
+                        )))
+                        .unwrap();
+                    }
+                    Some(Request::Block(mut chan, _, _)) => {
+                        println!("command-close-block");
+                        chan.close().unwrap();
+                    }
+                    _ => {
+                        println!("command-close-nothing");
+                        ()
+                    },
+                };
                 future::ok((sink, cc))
             }),
         })

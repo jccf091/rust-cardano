@@ -1,7 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use std::{
-    io::{BufRead, Cursor, Write},
-    ops::Deref,
+    io::{BufRead, Write},
 };
 
 use cbor_event::{
@@ -183,32 +182,7 @@ where
             Some(msg) => Ok(msg),
             None => {
                 println!("[{}:{}] expect bytes: data {}", file!(), line!(), cardano::util::hex::encode(&bytes));
-                let mut cbor = Deserializer::from(Cursor::new(bytes.deref()));
-                let msg_type: MessageType = cbor.deserialize().unwrap();
-                println!("[{}:{}] expect bytes: message type: {:?}", file!(), line!(), msg_type);
-                match msg_type {
-                    MessageType::MsgGetHeaders => Ok(Message::GetBlockHeaders(
-                        lwcid,
-                        cbor.deserialize_complete().unwrap(),
-                    )),
-                    MessageType::MsgHeaders => Ok(Message::BlockHeaders(
-                        lwcid,
-                        cbor.deserialize_complete().unwrap(),
-                    )),
-                    MessageType::MsgGetBlocks => Ok(Message::GetBlocks(
-                        lwcid,
-                        cbor.deserialize_complete().unwrap(),
-                    )),
-                    MessageType::MsgBlock => {
-                        Ok(Message::Block(lwcid, cbor.deserialize_complete().unwrap()))
-                    }
-                    MessageType::MsgSubscribe1 => {
-                        let v: u64 = cbor.deserialize_complete().unwrap();
-                        let keep_alive = v == 43;
-                        Ok(Message::Subscribe(lwcid, keep_alive))
-                    }
-                    _ => unimplemented!(),
-                }
+                Ok(Message::Bytes(lwcid, bytes))
             }
         }
     }
